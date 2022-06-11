@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "declaration": true,
+        "rootDir": "./src/",
+        "outDir": "./lib/",
+        "composite": true
+    },
+    "exclude": ["node_modules", "lib"]
+}
