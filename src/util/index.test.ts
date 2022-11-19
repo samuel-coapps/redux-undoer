@@ -6,8 +6,8 @@
 // Point-of-care clinical decision support
 // ---------------------------------------------------------------------------
 
-import { Diff as D } from './differencer'
-import { ActionList, forwardApplyDiffs, reverseApplyDiffs } from './util'
+import { Diff as D } from '../structure'
+import { ActionList, forwardApplyDiffs, reverseApplyDiffs } from './index'
 
 test('ActionList', () => {
     const list = new ActionList([

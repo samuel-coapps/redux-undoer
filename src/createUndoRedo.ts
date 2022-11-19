@@ -8,10 +8,14 @@
 
 import { Action, Middleware, Reducer } from 'redux'
 import { AsyncThunkAction, ThunkDispatch } from '@reduxjs/toolkit'
-import { IDiff, IDifferencer, IForwardReverse } from './differencer'
-import ChangesStack from './changesStack'
+import { IDiff, IDifferencer, IForwardReverse } from './structure'
 import { UndoableActionGroup } from './undoableAction'
-import { ActionList, forwardApplyDiffs, reverseApplyDiffs } from './util'
+import {
+    ActionList,
+    ChangesStack,
+    forwardApplyDiffs,
+    reverseApplyDiffs
+} from './util'
 
 const ActionTypes = {
     setState: 'Undoable::action::internal::setState',
@@ -93,6 +97,7 @@ function createUndoRedo<TState, TDiff extends IDiff>(options: {
                             const end: TState = getState()
                             const diffs = differencer.calculateDiffs(begin, end)
                             capturedDiffs.push(diffs)
+                            actionUndoable.actions.push(action)
 
                             pendingActionGroups.delete(requestId!)
 
@@ -110,6 +115,9 @@ function createUndoRedo<TState, TDiff extends IDiff>(options: {
                                 } else if (mergeTarget) {
                                     mergeTarget.diffs =
                                         mergeTarget.diffs.concat(capturedDiffs)
+                                    mergeTarget.actions = mergeTarget.actions.concat(
+                                        actionUndoable.actions
+                                    )
                                     mergeTarget.groupIds.add(actionUndoable.groupId)
                                     if (actionUndoable.dropTail) {
                                         stack.dropTail()
@@ -117,6 +125,7 @@ function createUndoRedo<TState, TDiff extends IDiff>(options: {
                                 } else {
                                     stack.putChange({
                                         diffs: capturedDiffs,
+                                        actions: actionUndoable.actions,
                                         groupIds: new Set([actionUndoable.groupId]),
                                     })
                                 }
@@ -128,19 +137,25 @@ function createUndoRedo<TState, TDiff extends IDiff>(options: {
                         }
                     } else if (!dispatchingUndoable) {
                         if (action?.type === ActionTypes.undo) {
-                            const { diffs } = stack.undo() ?? {}
+                            const { diffs, actions } = stack.undo() ?? {}
                             if (diffs) {
                                 return next({
                                     type: ActionTypes.setState,
-                                    payload: moveStateBack(diffs),
+                                    payload: {
+                                        restoredState: moveStateBack(diffs),
+                                        undoneActions: actions
+                                    },
                                 })
                             }
                         } else if (action?.type === ActionTypes.redo) {
-                            const { diffs } = stack.redo() ?? {}
+                            const { diffs, actions } = stack.redo() ?? {}
                             if (diffs) {
                                 return next({
                                     type: ActionTypes.setState,
-                                    payload: moveStateForward(diffs),
+                                    payload: {
+                                        restoredState: moveStateForward(diffs),
+                                        redoneActions: actions
+                                    },
                                 })
                             }
                         }
@@ -160,7 +175,7 @@ function createUndoRedo<TState, TDiff extends IDiff>(options: {
     const wrappedReducer = (state: TState | undefined, action: Action) => {
         if (action.type === ActionTypes.setState) {
             // @ts-expect-error action.payload is TState
-            return action.payload as TState
+            return action.payload.restoredState as TState
         }
         return reducer(state, action)
     }
@@ -183,7 +198,7 @@ function clearAllChanges() {
     return { type: ActionTypes.clearAllChanges }
 }
 
-export { Undoable, createUndoRedo, undo, redo, clearAllChanges }
+export { Undoable, createUndoRedo, undo, redo, clearAllChanges, ActionTypes }
 
 function InfoForActionGroup (action: UndoableActionGroup) {
     const createdActions = action.actions.map((a) => a.create())
@@ -195,6 +210,7 @@ function InfoForActionGroup (action: UndoableActionGroup) {
                 .map((a) => a.pendingType!)
         ),
         capturedDiffs: [],
+        actions: [],
         remaining: new ActionList(
             createdActions.map((a) => a.actionTypes)
         ),
@@ -226,6 +242,7 @@ type TActionGroupInfo<TDiff> = {
     dispatches: (AsyncThunkAction<any, any, any> | Action)[]
     pendingTypes: Set<string>
     capturedDiffs: IForwardReverse<TDiff>[]
+    actions: Action[]
     remaining: ActionList
     groupId: string
     dropTail?: boolean
@@ -234,5 +251,6 @@ type TActionGroupInfo<TDiff> = {
 }
 type TStackItem<TDiff> = {
     diffs: TDiff[]
+    actions: Action[]
     groupIds: Set<string>
 }

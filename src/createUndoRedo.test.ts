@@ -18,10 +18,10 @@ import {
     undo,
     redo,
     Undoable,
-    clearAllChanges,
+    clearAllChanges, ActionTypes,
 } from './createUndoRedo'
-import { Diff as D } from './differencer'
-import { waitFor } from './testUtil'
+import { Diff as D } from './structure'
+import { waitFor } from './util/testUtil'
 
 describe('createUndoMiddleware', () => {
     describe('undo/redo across two state keys', () => {
@@ -40,35 +40,35 @@ describe('createUndoMiddleware', () => {
             dispatch(Undoable().with(counter2.increment))
             dispatch(Undoable().with(counter1.increment))
 
-            ExpectedStateToMatch(store, 2, 2)
+            ExpectStateToMatch(store, 2, 2)
 
             dispatch(undo())
-            ExpectedStateToMatch(store, 1, 2)
+            ExpectStateToMatch(store, 1, 2)
 
             dispatch(undo())
-            ExpectedStateToMatch(store, 1, 1)
+            ExpectStateToMatch(store, 1, 1)
 
             // We should skip/not undo actions for the ignored state
             dispatch(undo())
-            ExpectedStateToMatch(store, 1, 0)
+            ExpectStateToMatch(store, 1, 0)
 
             dispatch(undo())
-            ExpectedStateToMatch(store, 0, 0)
+            ExpectStateToMatch(store, 0, 0)
 
             // We are at the end of the undo stack, so another undo should have no effect.
             dispatch(undo())
-            ExpectedStateToMatch(store, 0, 0)
+            ExpectStateToMatch(store, 0, 0)
 
             // Now redo all the recorded changes
 
             dispatch(redo())
-            ExpectedStateToMatch(store, 1, 0)
+            ExpectStateToMatch(store, 1, 0)
             dispatch(redo())
-            ExpectedStateToMatch(store, 1, 1)
+            ExpectStateToMatch(store, 1, 1)
             dispatch(redo())
-            ExpectedStateToMatch(store, 1, 2)
+            ExpectStateToMatch(store, 1, 2)
             dispatch(redo())
-            ExpectedStateToMatch(store, 2, 2)
+            ExpectStateToMatch(store, 2, 2)
         })
 
         test('forking', () => {
@@ -86,28 +86,28 @@ describe('createUndoMiddleware', () => {
             dispatch(undo())
             dispatch(redo())
             dispatch(undo())
-            ExpectedStateToMatch(store, 1, 1)
+            ExpectStateToMatch(store, 1, 1)
 
             dispatch(Undoable().with(counter1.increment))
-            ExpectedStateToMatch(store, 2, 1)
+            ExpectStateToMatch(store, 2, 1)
 
             // redo should have no effect after taking a new action
             dispatch(redo())
-            ExpectedStateToMatch(store, 2, 1)
+            ExpectStateToMatch(store, 2, 1)
 
             dispatch(undo())
             dispatch(undo())
             dispatch(undo())
             dispatch(undo())
 
-            ExpectedStateToMatch(store, 0, 0)
+            ExpectStateToMatch(store, 0, 0)
 
             dispatch(redo())
             dispatch(redo())
             dispatch(redo())
             dispatch(redo())
 
-            ExpectedStateToMatch(store, 2, 1)
+            ExpectStateToMatch(store, 2, 1)
         })
 
         describe('mergeWithLast', () => {
@@ -120,11 +120,11 @@ describe('createUndoMiddleware', () => {
 
                 dispatch(Undoable().with(counter2.increment).mergeWithLast())
 
-                ExpectedStateToMatch(store, 1, 1)
+                ExpectStateToMatch(store, 1, 1)
                 dispatch(undo())
-                ExpectedStateToMatch(store, 0, 0)
+                ExpectStateToMatch(store, 0, 0)
                 dispatch(redo())
-                ExpectedStateToMatch(store, 1, 1)
+                ExpectStateToMatch(store, 1, 1)
 
                 dispatch(
                     Undoable()
@@ -133,11 +133,11 @@ describe('createUndoMiddleware', () => {
                         .mergeWithLast()
                 )
 
-                ExpectedStateToMatch(store, 2, 2)
+                ExpectStateToMatch(store, 2, 2)
                 dispatch(undo())
-                ExpectedStateToMatch(store, 0, 0)
+                ExpectStateToMatch(store, 0, 0)
                 dispatch(redo())
-                ExpectedStateToMatch(store, 2, 2)
+                ExpectStateToMatch(store, 2, 2)
             })
 
             test('no undoable to merge with', () => {
@@ -145,11 +145,11 @@ describe('createUndoMiddleware', () => {
 
                 dispatch(Undoable().with(counter1.increment).mergeWithLast())
 
-                ExpectedStateToMatch(store, 1, 0)
+                ExpectStateToMatch(store, 1, 0)
                 dispatch(undo())
-                ExpectedStateToMatch(store, 0, 0)
+                ExpectStateToMatch(store, 0, 0)
                 dispatch(redo())
-                ExpectedStateToMatch(store, 1, 0)
+                ExpectStateToMatch(store, 1, 0)
             })
 
             describe('dropTail', () => {
@@ -168,9 +168,9 @@ describe('createUndoMiddleware', () => {
                             .mergeWithLast({ dropTail: true })
                     )
 
-                    ExpectedStateToMatch(store, 2, 0)
+                    ExpectStateToMatch(store, 2, 0)
                     dispatch(redo())
-                    ExpectedStateToMatch(store, 2, 0)
+                    ExpectStateToMatch(store, 2, 0)
                 })
 
                 test('dropTail is false', () => {
@@ -188,9 +188,9 @@ describe('createUndoMiddleware', () => {
                             .mergeWithLast({ dropTail: false })
                     )
 
-                    ExpectedStateToMatch(store, 2, 0)
+                    ExpectStateToMatch(store, 2, 0)
                     dispatch(redo())
-                    ExpectedStateToMatch(store, 2, 1)
+                    ExpectStateToMatch(store, 2, 1)
                 })
 
                 test('default', () => {
@@ -206,9 +206,9 @@ describe('createUndoMiddleware', () => {
                         Undoable().with(counter1.increment).mergeWithLast()
                     )
 
-                    ExpectedStateToMatch(store, 2, 0)
+                    ExpectStateToMatch(store, 2, 0)
                     dispatch(redo())
-                    ExpectedStateToMatch(store, 2, 1)
+                    ExpectStateToMatch(store, 2, 1)
                 })
             })
         })
@@ -226,11 +226,11 @@ describe('createUndoMiddleware', () => {
                     .mergeWithGroup(undoable)
                 dispatch(merge)
 
-                ExpectedStateToMatch(store, 1, 1)
+                ExpectStateToMatch(store, 1, 1)
                 dispatch(undo())
-                ExpectedStateToMatch(store, 0, 0)
+                ExpectStateToMatch(store, 0, 0)
                 dispatch(redo())
-                ExpectedStateToMatch(store, 1, 1)
+                ExpectStateToMatch(store, 1, 1)
 
                 dispatch(
                     Undoable()
@@ -239,11 +239,11 @@ describe('createUndoMiddleware', () => {
                         .mergeWithGroup(merge)
                 )
 
-                ExpectedStateToMatch(store, 2, 2)
+                ExpectStateToMatch(store, 2, 2)
                 dispatch(undo())
-                ExpectedStateToMatch(store, 0, 0)
+                ExpectStateToMatch(store, 0, 0)
                 dispatch(redo())
-                ExpectedStateToMatch(store, 2, 2)
+                ExpectStateToMatch(store, 2, 2)
             })
 
             test('merge with unknown undoable group', () => {
@@ -257,15 +257,15 @@ describe('createUndoMiddleware', () => {
                     Undoable().with(counter2.increment).mergeWithGroup(unknown)
                 )
 
-                ExpectedStateToMatch(store, 1, 1)
+                ExpectStateToMatch(store, 1, 1)
                 dispatch(undo())
-                ExpectedStateToMatch(store, 1, 0)
+                ExpectStateToMatch(store, 1, 0)
                 dispatch(undo())
-                ExpectedStateToMatch(store, 0, 0)
+                ExpectStateToMatch(store, 0, 0)
                 dispatch(redo())
-                ExpectedStateToMatch(store, 1, 0)
+                ExpectStateToMatch(store, 1, 0)
                 dispatch(redo())
-                ExpectedStateToMatch(store, 1, 1)
+                ExpectStateToMatch(store, 1, 1)
             })
         })
 
@@ -303,7 +303,7 @@ describe('createUndoMiddleware', () => {
             return { dispatch, store }
         }
 
-        function ExpectedStateToMatch(
+        function ExpectStateToMatch(
             store: Store,
             counter1: number,
             counter2: number
@@ -506,7 +506,161 @@ describe('createUndoMiddleware', () => {
             })
         })
 
-        function CreateCounterStore() {
+        describe('action metadata', () => {
+            describe('undo actions', () => {
+                test('undo 1 action', () => {
+                    const { middleware, captured } = CreateObserverMiddleware()
+                    const { counter, dispatch } = CreateCounterStore(
+                        [middleware]
+                    )
+
+                    dispatch(Undoable().with(counter.increment))
+                    dispatch(undo())
+
+                    expect(captured.action).toMatchObject({
+                        type: ActionTypes.setState,
+                        payload: {
+                            restoredState: {
+                                counter: { value: 0 },
+                                other: { value: 0 }
+                            },
+                            undoneActions: [counter.increment()]
+                        }
+                    })
+                })
+
+                test('undo 2 actions', () => {
+                    const { middleware, captured } = CreateObserverMiddleware()
+                    const { counter, dispatch } = CreateCounterStore(
+                        [middleware]
+                    )
+
+                    dispatch(Undoable()
+                        .with(counter.increment)
+                        .with(counter.increment)
+                    )
+                    dispatch(undo())
+
+                    expect(captured.action).toMatchObject({
+                        type: ActionTypes.setState,
+                        payload: {
+                            restoredState: {
+                                counter: { value: 0 },
+                                other: { value: 0 }
+                            },
+                            undoneActions: [
+                                counter.increment(),
+                                counter.increment()
+                            ]
+                        }
+                    })
+                })
+            })
+
+            describe('redo actions', ()  => {
+                test('redo 2 actions', ()  => {
+                    const { middleware, captured } = CreateObserverMiddleware()
+                    const { counter, dispatch } = CreateCounterStore(
+                        [middleware]
+                    )
+
+                    dispatch(Undoable()
+                        .with(counter.increment)
+                        .with(counter.increment)
+                    )
+                    dispatch(undo())
+                    dispatch(redo())
+
+                    expect(captured.action).toMatchObject({
+                        type: ActionTypes.setState,
+                        payload: {
+                            restoredState: {
+                                counter: { value: 2 },
+                                other: { value: 0 }
+                            },
+                            redoneActions: [
+                                counter.increment(),
+                                counter.increment()
+                            ]
+                        }
+                    })
+                })
+            })
+
+            test('merging action lists', async ()  => {
+                const { middleware, captured } = CreateObserverMiddleware()
+                const { counter, store, dispatch } = CreateCounterStore(
+                    [middleware]
+                )
+
+                const mergeGroup = Undoable().with(counter.increment)
+                dispatch(mergeGroup)
+
+                dispatch(
+                    Undoable()
+                        .with(counter.increment)
+                        .mergeWithGroup(mergeGroup)
+                )
+
+                dispatch(
+                    Undoable()
+                        .with(counter.incrementAsync)
+                        .mergeWithGroup(mergeGroup)
+                )
+                await waitFor(() => ExpectCounterToMatch(store, 3))
+
+                dispatch(undo())
+
+                expect(captured.action).toMatchObject({
+                    type: ActionTypes.setState,
+                    payload: {
+                        restoredState: {
+                            counter: { value: 0 },
+                            other: { value: 0 }
+                        },
+                        undoneActions: [
+                            counter.increment(),
+                            counter.increment(),
+                            { type: "counter:incrementAsync/fulfilled" }
+                        ]
+                    }
+                })
+
+                dispatch(redo())
+
+                expect(captured.action).toMatchObject({
+                    type: ActionTypes.setState,
+                    payload: {
+                        restoredState: {
+                            counter: { value: 3 },
+                            other: { value: 0 }
+                        },
+                        redoneActions: [
+                            counter.increment(),
+                            counter.increment(),
+                            { type: "counter:incrementAsync/fulfilled" }
+                        ]
+                    }
+                })
+            })
+
+            function CreateObserverMiddleware () {
+                let captured = { action: null }
+
+                function Observer () {
+                    return next => {
+                        return (action: any) => {
+                            captured.action = action
+                            return next(action)
+                        }
+                    }
+                }
+
+                return { middleware: Observer, captured }
+            }
+        })
+
+        function CreateCounterStore(extraMiddlewares=[]) {
             type TState = {
                 counter: { value: number }
                 other: { value: number }
@@ -528,7 +682,9 @@ describe('createUndoMiddleware', () => {
             const store = configureStore({
                 reducer,
                 middleware: (getDefaultMiddleware) => {
-                    return [middleware].concat(getDefaultMiddleware())
+                    return [middleware]
+                        .concat(extraMiddlewares)
+                        .concat(getDefaultMiddleware())
                 },
             })
 

@@ -6,5 +6,5 @@
 // Point-of-care clinical decision support
 // ---------------------------------------------------------------------------
 
-export * from './differencer'
+export * from './structure'
 export * from './createUndoRedo'

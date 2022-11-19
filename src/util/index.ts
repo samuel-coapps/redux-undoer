@@ -6,7 +6,8 @@
 // Point-of-care clinical decision support
 // ---------------------------------------------------------------------------
 
-import { IDiff, IDifferencer, IForwardReverse } from './differencer'
+import ChangesStack from './changesStack'
+import { IDiff, IDifferencer, IForwardReverse } from '../structure'
 
 class ActionList {
     private readonly remaining: Set<string>[]
@@ -52,4 +53,4 @@ function reverseApplyDiffs<TState, TDiff extends IDiff>(
     )
 }
 
-export { ActionList, forwardApplyDiffs, reverseApplyDiffs }
+export { ActionList, ChangesStack, forwardApplyDiffs, reverseApplyDiffs }
