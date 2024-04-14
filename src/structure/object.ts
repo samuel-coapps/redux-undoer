@@ -17,19 +17,22 @@ import { IDifferencer, IDiff } from './types'
 import { Empty, EmptyDiffs } from './emptyDiffs'
 import IdentityDifferencer from './identity'
 import { ForwardReverse, HasKey } from './util'
+import { KeyDifferencer, KeysDiff } from "./keys";
 
 export function MapDiff<K, V, TValueDiff extends IDiff> (
     inserts: Map<K, V>,
     updates: Map<K, TValueDiff>,
-    deletes: Map<K, V>
+    deletes: Map<K, V>,
+    keys: KeysDiff<K>
 ): TMapDiff<K, V, TValueDiff> {
-    return { inserts, updates, deletes, isEmpty: false }
+    return { inserts, updates, deletes, keys, isEmpty: false }
 }
 
 export type TMapDiff<K, V, TValueDiff extends IDiff> = {
     readonly inserts: Map<K, V>
     readonly updates: Map<K, TValueDiff>
     readonly deletes: Map<K, V>
+    readonly keys: KeysDiff<K>
     readonly isEmpty: false
 }
 
@@ -48,6 +51,7 @@ export default class ObjectDifferencer<
 {
     private readonly primary: IDifferencer<T[keyof T], TValueDiff>
     private readonly overrides: TFieldDifferencers<T, TValueDiff>
+    private readonly keyDifferencer: KeyDifferencer<keyof T>
     private readonly overWriteExisting: boolean
 
     constructor(options?: TOptions<T, TValueDiff>) {
@@ -61,6 +65,8 @@ export default class ObjectDifferencer<
             Object.assign(this.overrides, overridesOptions)
         }
 
+        this.keyDifferencer = new KeyDifferencer()
+
         this.overWriteExisting = Boolean(options?.overwriteExisting ?? true)
     }
 
@@ -71,27 +77,47 @@ export default class ObjectDifferencer<
             return current
         }
 
-        const updated: T = Object.assign({}, current)
+        const newKeys = this.keyDifferencer.applyDiff(
+            Object.keys(current) as (keyof T)[],
+            diff.keys,
+        )
 
-        diff.inserts.forEach((insertV, k) => {
-            if (overWriteExisting || !HasKey(current, k)) {
-                updated[k] = insertV
-            }
-        })
+        const { inserts, updates } = diff
+        const insertKeys = Array.from(inserts.keys())
+        const updateKeys = Array.from(updates.keys())
 
-        diff.updates.forEach((diffV, k) => {
-            if (HasKey(current, k)) {
-                updated[k] = this.$(k).applyDiff(current[k]!, diffV)
+        // @ts-expect-error Missing properties are added below
+        const updated: T = {}
+
+        let nextInsert = 0
+        const lastInsert = insertKeys.length - 1
+        let nextUpdate = 0
+        const lastUpdate = updateKeys.length - 1
+        newKeys.forEach(k => {
+            if (nextInsert <= lastInsert && k === insertKeys[nextInsert]) {
+                if (overWriteExisting || !HasKey(current, k)) {
+                    updated[k] = inserts.get(k)
+                } else {
+                    updated[k] = current[k]
+                }
+                nextInsert++;
+            } else if (nextUpdate <= lastUpdate && k === updateKeys[nextUpdate]) {
+                if (HasKey(current, k)) {
+                    updated[k] = this.$(k).applyDiff(current[k]!, updates.get(k))
+                }
+                nextUpdate++;
+            } else {
+                updated[k] = current[k]
             }
         })
 
         diff.deletes.forEach((deleteV, k) => {
             if (
-                overWriteExisting ||
-                !HasKey(current, k) ||
-                this.$(k).calculateDiffs(deleteV, current[k]!).forward.isEmpty
+                !overWriteExisting &&
+                HasKey(current, k) &&
+                !this.$(k).calculateDiffs(deleteV, current[k]!).forward.isEmpty
             ) {
-                delete updated[k]
+                updated[k] = current[k]
             }
         })
 
@@ -133,9 +159,14 @@ export default class ObjectDifferencer<
             return EmptyDiffs
         }
 
+        const keyDiffs = this.keyDifferencer.calculateDiffs(
+            Object.keys(from) as (keyof T)[],
+            Object.keys(to) as (keyof T)[]
+        )
+
         return ForwardReverse(
-            MapDiff(inserts, updates, deletes),
-            MapDiff(deletes, reverseUpdates, inserts)
+            MapDiff(inserts, updates, deletes, keyDiffs.forward),
+            MapDiff(deletes, reverseUpdates, inserts, keyDiffs.reverse)
         )
     }
 
@@ -159,7 +190,8 @@ export default class ObjectDifferencer<
         return KeysAreChanged(diffA, diffB.inserts.keys()) ||
                KeysAreChanged(diffA, diffB.deletes.keys()) ||
                KeysAreChanged(diffB, diffA.inserts.keys()) ||
-               KeysAreChanged(diffB, diffA.deletes.keys())
+               KeysAreChanged(diffB, diffA.deletes.keys()) ||
+               this.keyDifferencer.diffsIntersect(diffA.keys, diffB.keys)
 
         function KeysAreChanged (
             diff: TMapDiff<keyof T, T[keyof T], TValueDiff>,

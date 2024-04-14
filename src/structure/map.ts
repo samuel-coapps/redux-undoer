@@ -15,16 +15,20 @@ import { TMapDiff, MapDiff } from './object'
 import { IDiff, IDifferencer } from './types'
 import { Empty, EmptyDiffs } from './emptyDiffs'
 import IdentityDifferencer from './identity'
-import { ForwardReverse } from './util'
+import {ForwardReverse, HasKey} from './util'
+import {KeyDifferencer} from "./keys";
 
 export class MapDifferencer<K, V, VDiff extends IDiff = IDiff>
     implements IDifferencer<Map<K, V>, TDiff<K, V, VDiff>>
 {
     private readonly differencer: IDifferencer<V, VDiff>
+    private readonly keyDifferencer: KeyDifferencer<K>
 
     constructor(differencer?: IDifferencer<V, IDiff>) {
         // @ts-ignore
         this.differencer = differencer ?? new IdentityDifferencer()
+
+        this.keyDifferencer = new KeyDifferencer<K>()
     }
 
     applyDiff(value: Map<K, V>, diff: TDiff<K, V, VDiff>) {
@@ -32,20 +36,34 @@ export class MapDifferencer<K, V, VDiff extends IDiff = IDiff>
             return value
         }
 
+        const newKeys = this.keyDifferencer.applyDiff(
+            Array.from(value.keys()),
+            diff.keys,
+        )
+
+        const { inserts, updates } = diff
+        const insertKeys = Array.from(inserts.keys())
+        const updateKeys = Array.from(updates.keys())
+
         const updated = new Map<K, V>()
 
-        value.forEach((v, k) => {
-            if (diff.updates.has(k)) {
+        let nextInsert = 0
+        const lastInsert = insertKeys.length - 1
+        let nextUpdate = 0
+        const lastUpdate = updateKeys.length - 1
+        newKeys.forEach(k => {
+            if (nextInsert <= lastInsert && k === insertKeys[nextInsert]) {
+                updated.set(k, inserts.get(k))
+                nextInsert++;
+            } else if (nextUpdate <= lastUpdate && k === updateKeys[nextUpdate]) {
+                const v = value.get(k)
                 const vDiff = diff.updates.get(k)
                 const vNew = this.differencer.applyDiff(v, vDiff)
                 updated.set(k, vNew)
-            } else if (!diff.deletes.has(k)) {
-                updated.set(k, v)
+                nextUpdate++;
+            } else {
+                updated.set(k, value.get(k))
             }
-        })
-
-        diff.inserts.forEach((v, k) => {
-            updated.set(k, v)
         })
 
         return updated
@@ -76,17 +94,23 @@ export class MapDifferencer<K, V, VDiff extends IDiff = IDiff>
             }
         })
 
+        const keyDiffs = this.keyDifferencer.calculateDiffs(
+            Array.from(from.keys()),
+            Array.from(to.keys())
+        )
+
         if (
             inserts.size === 0 &&
             deletes.size === 0 &&
-            forwardUpdates.size === 0
+            forwardUpdates.size === 0 &&
+            keyDiffs.forward.isEmpty
         ) {
             return EmptyDiffs
         }
 
         return ForwardReverse(
-            MapDiff(inserts, forwardUpdates, deletes),
-            MapDiff(deletes, reverseUpdates, inserts)
+            MapDiff(inserts, forwardUpdates, deletes, keyDiffs.forward),
+            MapDiff(deletes, reverseUpdates, inserts, keyDiffs.reverse)
         )
     }
 
@@ -107,7 +131,8 @@ export class MapDifferencer<K, V, VDiff extends IDiff = IDiff>
         return KeysAreChanged(diffA, diffB.inserts.keys()) ||
             KeysAreChanged(diffA, diffB.deletes.keys()) ||
             KeysAreChanged(diffB, diffA.inserts.keys()) ||
-            KeysAreChanged(diffB, diffA.deletes.keys())
+            KeysAreChanged(diffB, diffA.deletes.keys()) ||
+            this.keyDifferencer.diffsIntersect(diffA.keys, diffB.keys)
 
         function KeysAreChanged (
             diff: TMapDiff<K, V, VDiff>,

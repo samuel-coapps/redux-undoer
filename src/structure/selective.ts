@@ -33,6 +33,7 @@ export function SelectiveDiff <
     return { partDiffs, isEmpty: false }
 }
 
+// NOTE SelectiveDifferencer does currently not preserve the iteration order of object entries.
 export default class SelectiveDifferencer<
     TWhole,
     TSpec extends TSelectiveSpec<TWhole, TSpec>

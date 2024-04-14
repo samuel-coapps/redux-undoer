@@ -11,9 +11,9 @@
 //   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //   See the License for the specific language governing permissions and
 // limitations under the License.
-import { SetDiff, SetDifferencer } from './set'
+import { SetDifferencer } from './set'
 import { Empty, EmptyDiffs } from './emptyDiffs'
-import { ForwardReverse } from './util'
+import { ForwardReverse, KeyDiff, KeyDiffReverse } from './util'
 
 describe('SetDifferencer', () => {
     const D = new SetDifferencer<number>()
@@ -24,65 +24,78 @@ describe('SetDifferencer', () => {
 
         expect(D.applyDiff(
             new Set([0]),
-            SetDiff(new Set([1]), new Set())
+            KeyDiff([0], [0, 1])
         )).toStrictEqual(new Set([0, 1]))
 
         expect(D.applyDiff(
             new Set([0, 1]),
-            SetDiff(new Set(), new Set([1]))
+            KeyDiff([0, 1], [0])
         )).toStrictEqual(new Set([0]))
 
         expect(D.applyDiff(
             new Set([0]),
-            SetDiff(new Set([1]), new Set([0]))
+            KeyDiff([0], [1])
         )).toStrictEqual(new Set([1]))
     })
 
     test('calculateDiffs', () => {
-        expect(D.calculateDiffs(new Set(), new Set())).toBe(EmptyDiffs)
-        expect(D.calculateDiffs(new Set([0]), new Set([0]))).toBe(EmptyDiffs)
+        expect(D.calculateDiffs(new Set(), new Set())).toStrictEqual(
+            EmptyDiffs
+        )
+        expect(D.calculateDiffs(new Set([0]), new Set([0]))).toStrictEqual(
+            EmptyDiffs
+        )
 
         expect(D.calculateDiffs(new Set(), new Set([0]))).toStrictEqual(
             ForwardReverse(
-                SetDiff(new Set([0]), new Set()),
-                SetDiff(new Set(), new Set([0]))
+                KeyDiff([], [0]),
+                KeyDiffReverse([], [0]),
             )
         )
         expect(D.calculateDiffs(new Set([0]), new Set())).toStrictEqual(
             ForwardReverse(
-                SetDiff(new Set(), new Set([0])),
-                SetDiff(new Set([0]), new Set())
+                KeyDiff([0], []),
+                KeyDiffReverse([0], []),
             )
         )
 
         expect(D.calculateDiffs(new Set([0]), new Set([1]))).toStrictEqual(
             ForwardReverse(
-                SetDiff(new Set([1]), new Set([0])),
-                SetDiff(new Set([0]), new Set([1]))
+                KeyDiff([0], [1]),
+                KeyDiffReverse([0], [1]),
             )
+        )
+    })
+
+    test("iteration order of set members", () => {
+        const s = new Set([1, 2])
+        const diff = D.calculateDiffs(s, new Set([1]))
+        const recovered = D.applyDiff(new Set([1]), diff.reverse)
+        expect(recovered).toEqual(s)
+        expect(Array.from(recovered.entries())).toEqual(
+            Array.from(s.entries())
+        )
+
+        const diff2 = D.calculateDiffs(s, new Set([2]))
+        const recovered2 = D.applyDiff(new Set([2]), diff2.reverse)
+        expect(recovered2).toEqual(s)
+        expect(Array.from(recovered2.entries())).toEqual(
+            Array.from(s.entries())
         )
     })
 
     test('diffsIntersect', () => {
         expect(D.diffsIntersect(Empty, Empty)).toBe(false)
         expect(
-            D.diffsIntersect(Empty, SetDiff(new Set([0]), new Set()))
+            D.diffsIntersect(Empty, KeyDiff([], [0]))
         ).toBe(false)
         expect(
-            D.diffsIntersect(SetDiff(new Set([0]), new Set()), Empty)
+            D.diffsIntersect(KeyDiff([], [0]), Empty)
         ).toBe(false)
 
         expect(D.diffsIntersect(
-            SetDiff(new Set([0]), new Set([])),
-            SetDiff(new Set(), new Set([1]))
+            KeyDiff([], [0]),
+            KeyDiff([1], [])
         )).toBe(true)
-    })
-})
-
-test('SetDiff', () => {
-    expect(SetDiff(new Set([0]), new Set([1]))).toStrictEqual({
-        inserts: new Set([0]),
-        deletes: new Set([1]),
-        isEmpty: false
     })
 })

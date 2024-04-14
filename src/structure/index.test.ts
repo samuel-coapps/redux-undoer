@@ -15,7 +15,7 @@
 
 import { Diff, Transforms } from './index'
 import IdentityDifferencer, { IdentityDiff } from './identity'
-import { ForwardReverse } from './util'
+import { ForwardReverse, KeyDiff, KeyDiffReverse } from './util'
 import ObjectDifferencer, { MapDiff } from './object'
 import { Empty } from './emptyDiffs'
 
@@ -28,12 +28,14 @@ describe('Diff', () => {
                 MapDiff(
                     new Map([['key1', 1]]),
                     new Map(),
-                    new Map([['key0', 0]])
+                    new Map([['key0', 0]]),
+                    KeyDiff(['key0'], ['key1'])
                 ),
                 MapDiff(
                     new Map([['key0', 0]]),
                     new Map(),
                     new Map([['key1', 1]]),
+                    KeyDiffReverse(['key0'], ['key1'])
                 )
             )
         )
@@ -53,12 +55,14 @@ describe('Diff', () => {
                 MapDiff(
                     new Map([['key1', 1]]),
                     new Map([['key0', IdentityDiff(0, 1)]]),
-                    new Map()
+                    new Map(),
+                    KeyDiff(['key0'], ['key0', 'key1'])
                 ),
                 MapDiff(
                     new Map(),
                     new Map([['key0', IdentityDiff(1, 0)]]),
                     new Map([['key1', 1]]),
+                    KeyDiffReverse(['key0'], ['key0', 'key1'])
                 )
             )
         )
@@ -92,12 +96,14 @@ describe('Diff', () => {
                 MapDiff(
                     new Map(),
                     new Map([['known', IdentityDiff(0, 1)]]),
-                    new Map()
+                    new Map(),
+                    Empty,
                 ),
                 MapDiff(
                     new Map(),
                     new Map([['known', IdentityDiff(1, 0)]]),
-                    new Map()
+                    new Map(),
+                    Empty,
                 )
             )
         )
@@ -260,5 +266,59 @@ describe('Transforms', () => {
         expect(d.diffsIntersect(diff0.forward, diff1.forward)).toBe(true)
         expect(d.diffsIntersect(diff0.forward, diff2.forward)).toBe(false)
         expect(d.diffsIntersect(diff1.forward, diff2.forward)).toBe(false)
+    })
+
+    test('listToObjectMap -- add and remove unique items', () => {
+        const d = Transforms.listToObjectMap<{ key: string, value: number }>(
+          {
+              keyOf: x => x.key,
+              differencers: {
+                  unique: Transforms.json(),
+                  duplicated: Transforms.json()
+              }
+          }
+        )
+
+        const kAv0 = { key: 'A', value: 0 }
+        const kBv0 = { key: 'B', value: 0 }
+
+        const diffRemove = d.calculateDiffs([kAv0, kBv0], [kAv0])
+        const diffAdd = d.calculateDiffs([kAv0], [kAv0, kBv0])
+
+        expect(
+          d.applyDiff([kAv0, kBv0], diffRemove.forward)
+        ).toStrictEqual([kAv0])
+        expect(
+          d.applyDiff([kAv0], diffRemove.reverse)
+        ).toStrictEqual([kAv0, kBv0])
+
+        expect(
+          d.applyDiff([kAv0], diffAdd.forward)
+        ).toStrictEqual([kAv0, kBv0])
+        expect(
+          d.applyDiff([kAv0, kBv0], diffAdd.reverse)
+        ).toStrictEqual([kAv0])
+    })
+
+    test('listToObjectMap -- preserves order', () => {
+        const d = Transforms.listToObjectMap<{ key: string, value: number }>(
+          {
+              keyOf: x => x.key,
+              differencers: {
+                  unique: Transforms.json(),
+                  duplicated: Transforms.json()
+              }
+          }
+        )
+
+        const kAv0 = { key: 'A', value: 0 }
+        const kBv0 = { key: 'B', value: 0 }
+
+        const diffRemove = d.calculateDiffs([kAv0, kBv0], [kBv0])
+        const recovered = d.applyDiff([kBv0], diffRemove.reverse)
+        expect(recovered).toEqual([kAv0, kBv0])
+
+        expect(d.calculateDiffs([kAv0, kBv0], [kBv0, kAv0]).forward.isEmpty).not.toBeFalsy()
+        expect(d.calculateDiffs([kAv0, kBv0], [kBv0, kAv0]).reverse.isEmpty).not.toBeFalsy()
     })
 })

@@ -12,6 +12,7 @@
 //   See the License for the specific language governing permissions and
 // limitations under the License.
 import { IForwardReverse } from './types'
+import { KeyDifferencer } from "./keys";
 
 const hasOwnProperty = {}.hasOwnProperty
 
@@ -27,4 +28,12 @@ export function ForwardReverse<TDiff> (
     reverse: TDiff
 ): IForwardReverse<TDiff> {
     return { forward, reverse }
+}
+
+// Used in tests
+export function KeyDiff<K> (a: K[], b: K[]) {
+    return new KeyDifferencer<K>().calculateDiffs(a, b).forward
+}
+export function KeyDiffReverse<K> (a: K[], b: K[]) {
+    return new KeyDifferencer<K>().calculateDiffs(a, b).reverse
 }

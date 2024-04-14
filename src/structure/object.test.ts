@@ -17,7 +17,8 @@ import { EmptyDiffs, Empty } from './emptyDiffs'
 import IdentityDifferencer, { IdentityDiff } from './identity'
 import TransformDifferencer from './transform'
 import { IDiff } from './types'
-import { ForwardReverse } from './util'
+import { ForwardReverse, KeyDiff, KeyDiffReverse } from './util'
+import { KeyDifferencer } from "./keys";
 
 describe('ObjectDifferencer', () => {
     describe('applyDiff', () => {
@@ -29,13 +30,23 @@ describe('ObjectDifferencer', () => {
 
         test('add a value', () => {
             const D = new ObjectDifferencer<any>()
-            const diff = MapDiff(new Map([['a', 1]]), new Map(), new Map())
+            const diff = MapDiff(
+                new Map([['a', 1]]),
+                new Map(),
+                new Map(),
+                KeyDiff([], ['a'])
+            )
             expect(D.applyDiff({}, diff)).toStrictEqual({ a: 1 })
         })
 
         test('remove a value', () => {
             const D = new ObjectDifferencer<any>()
-            const diff = MapDiff(new Map(), new Map(), new Map([['a', 1]]))
+            const diff = MapDiff(
+                new Map(),
+                new Map(),
+                new Map([['a', 1]]),
+                KeyDiff(['a'], [])
+            )
             expect(D.applyDiff({ a: 1 }, diff)).toStrictEqual({})
         })
 
@@ -44,7 +55,8 @@ describe('ObjectDifferencer', () => {
             const diff = MapDiff(
                 new Map(),
                 new Map([['a', IdentityDiff(1, 2)]]),
-                new Map()
+                new Map(),
+                Empty,
             )
             expect(D.applyDiff({ a: 1 }, diff)).toStrictEqual({ a: 2 })
         })
@@ -54,7 +66,8 @@ describe('ObjectDifferencer', () => {
                 const diff = MapDiff(
                     new Map([['a', 1]]),
                     new Map(),
-                    new Map([['b', 2]])
+                    new Map([['b', 2]]),
+                    KeyDiff(['a', 'b'], ['a']),
                 )
 
                 test('default', () => {
@@ -101,7 +114,8 @@ describe('ObjectDifferencer', () => {
                     const diff = MapDiff(
                         new Map(),
                         new Map([['a', IdentityDiff('1', '2')]]),
-                        new Map()
+                        new Map(),
+                        Empty
                     )
                     expect(D.applyDiff({ a: 1 }, diff)).toStrictEqual({ a: 2 })
                 })
@@ -113,7 +127,8 @@ describe('ObjectDifferencer', () => {
                     const diff = MapDiff(
                         new Map(),
                         new Map([['a', IdentityDiff('1', '2')]]),
-                        new Map()
+                        new Map(),
+                        Empty
                     )
                     expect(D.applyDiff({ a: 1 }, diff)).toStrictEqual({ a: 2 })
                 })
@@ -125,7 +140,8 @@ describe('ObjectDifferencer', () => {
             const diff = MapDiff(
                 new Map(),
                 new Map([[0, IdentityDiff(1, 2)]]),
-                new Map()
+                new Map(),
+                Empty
             )
             // ignore updates if the key isn't in the map being updated
             expect(D.applyDiff({}, diff)).toStrictEqual({})
@@ -143,8 +159,8 @@ describe('ObjectDifferencer', () => {
             const D = new ObjectDifferencer<any>()
             expect(D.calculateDiffs({}, { a: 1 })).toStrictEqual(
                 ForwardReverse(
-                    MapDiff(new Map([['a', 1]]), new Map(), new Map()),
-                    MapDiff(new Map(), new Map(), new Map([['a', 1]]))
+                    MapDiff(new Map([['a', 1]]), new Map(), new Map(), KeyDiff([], ['a'])),
+                    MapDiff(new Map(), new Map(), new Map([['a', 1]]), KeyDiffReverse([], ['a']))
                 )
             )
         })
@@ -153,8 +169,8 @@ describe('ObjectDifferencer', () => {
             const D = new ObjectDifferencer<any>()
             expect(D.calculateDiffs({ a: 1 }, {})).toStrictEqual(
                 ForwardReverse(
-                    MapDiff(new Map(), new Map(), new Map([['a', 1]])),
-                    MapDiff(new Map([['a', 1]]), new Map(), new Map())
+                    MapDiff(new Map(), new Map(), new Map([['a', 1]]), KeyDiff(['a'], [])),
+                    MapDiff(new Map([['a', 1]]), new Map(), new Map(), KeyDiffReverse(['a'], []))
                 )
             )
         })
@@ -166,12 +182,14 @@ describe('ObjectDifferencer', () => {
                     MapDiff(
                         new Map(),
                         new Map([['a', IdentityDiff(1, 2)]]),
-                        new Map()
+                        new Map(),
+                        Empty
                     ),
                     MapDiff(
                         new Map(),
                         new Map([['a', IdentityDiff(2, 1)]]),
-                        new Map()
+                        new Map(),
+                        Empty,
                     )
                 )
             )
@@ -196,12 +214,14 @@ describe('ObjectDifferencer', () => {
                             MapDiff(
                                 new Map(),
                                 new Map([['a', IdentityDiff('1', '2')]]),
-                                new Map()
+                                new Map(),
+                                Empty,
                             ),
                             MapDiff(
                                 new Map(),
                                 new Map([['a', IdentityDiff('2', '1')]]),
-                                new Map()
+                                new Map(),
+                                Empty,
                             )
                         )
                     )
@@ -216,18 +236,30 @@ describe('ObjectDifferencer', () => {
                             MapDiff(
                                 new Map(),
                                 new Map([['a', IdentityDiff('1', '2')]]),
-                                new Map()
+                                new Map(),
+                                Empty,
                             ),
                             MapDiff(
                                 new Map(),
                                 new Map([['a', IdentityDiff('2', '1')]]),
-                                new Map()
+                                new Map(),
+                                Empty,
                             )
                         )
                     )
                 })
             })
         })
+    })
+
+    test('iteration order of object entries', () => {
+        const differencer = new ObjectDifferencer<TAbc>()
+        const o = Object.fromEntries([['a', 1], ['b', 2]])
+        const diff = differencer.calculateDiffs(o, { b: 1 })
+        const recovered = differencer.applyDiff({ b: 1 }, diff.reverse)
+        expect(recovered).toEqual(o)
+        expect(JSON.stringify(recovered)).toEqual(JSON.stringify(o))
+        expect(Object.entries(recovered)).toEqual(Object.entries(o))
     })
 
     describe('diffsIntersect', () => {
@@ -285,74 +317,74 @@ describe('ObjectDifferencer', () => {
             
             expect(differencer.diffsIntersect(Ix0, Ix0)).toBe(true)
             expect(differencer.diffsIntersect(Ix0, Ix1)).toBe(true)
-            expect(differencer.diffsIntersect(Ix0, Iz0)).toBe(false)
+            expect(differencer.diffsIntersect(Ix0, Iz0)).toBe(true)
             expect(differencer.diffsIntersect(Ix0, Ux)).toBe(true)
-            expect(differencer.diffsIntersect(Ix0, Uz)).toBe(false)
+            expect(differencer.diffsIntersect(Ix0, Uz)).toBe(true)
             expect(differencer.diffsIntersect(Ix0, Dx0)).toBe(true)
             expect(differencer.diffsIntersect(Ix0, Dx1)).toBe(true)
-            expect(differencer.diffsIntersect(Ix0, Dz0)).toBe(false)
+            expect(differencer.diffsIntersect(Ix0, Dz0)).toBe(true)
 
             expect(differencer.diffsIntersect(Ix1, Ix0)).toBe(true)
             expect(differencer.diffsIntersect(Ix1, Ix1)).toBe(true)
-            expect(differencer.diffsIntersect(Ix1, Iz0)).toBe(false)
+            expect(differencer.diffsIntersect(Ix1, Iz0)).toBe(true)
             expect(differencer.diffsIntersect(Ix1, Ux)).toBe(true)
-            expect(differencer.diffsIntersect(Ix1, Uz)).toBe(false)
+            expect(differencer.diffsIntersect(Ix1, Uz)).toBe(true)
             expect(differencer.diffsIntersect(Ix1, Dx0)).toBe(true)
             expect(differencer.diffsIntersect(Ix1, Dx1)).toBe(true)
-            expect(differencer.diffsIntersect(Ix1, Dz0)).toBe(false)
+            expect(differencer.diffsIntersect(Ix1, Dz0)).toBe(true)
 
-            expect(differencer.diffsIntersect(Iz0, Ix0)).toBe(false)
-            expect(differencer.diffsIntersect(Iz0, Ix1)).toBe(false)
+            expect(differencer.diffsIntersect(Iz0, Ix0)).toBe(true)
+            expect(differencer.diffsIntersect(Iz0, Ix1)).toBe(true)
             expect(differencer.diffsIntersect(Iz0, Iz0)).toBe(true)
-            expect(differencer.diffsIntersect(Iz0, Ux)).toBe(false)
+            expect(differencer.diffsIntersect(Iz0, Ux)).toBe(true)
             expect(differencer.diffsIntersect(Iz0, Uz)).toBe(true)
-            expect(differencer.diffsIntersect(Iz0, Dx0)).toBe(false)
-            expect(differencer.diffsIntersect(Iz0, Dx1)).toBe(false)
+            expect(differencer.diffsIntersect(Iz0, Dx0)).toBe(true)
+            expect(differencer.diffsIntersect(Iz0, Dx1)).toBe(true)
             expect(differencer.diffsIntersect(Iz0, Dz0)).toBe(true)
 
             expect(differencer.diffsIntersect(Ux, Ix0)).toBe(true)
             expect(differencer.diffsIntersect(Ux, Ix1)).toBe(true)
-            expect(differencer.diffsIntersect(Ux, Iz0)).toBe(false)
+            expect(differencer.diffsIntersect(Ux, Iz0)).toBe(true)
             expect(differencer.diffsIntersect(Ux, Ux)).toBe(true)
             expect(differencer.diffsIntersect(Ux, Uz)).toBe(false)
             expect(differencer.diffsIntersect(Ux, Dx0)).toBe(true)
             expect(differencer.diffsIntersect(Ux, Dx1)).toBe(true)
-            expect(differencer.diffsIntersect(Ux, Dz0)).toBe(false)
+            expect(differencer.diffsIntersect(Ux, Dz0)).toBe(true)
 
-            expect(differencer.diffsIntersect(Uz, Ix0)).toBe(false)
-            expect(differencer.diffsIntersect(Uz, Ix1)).toBe(false)
+            expect(differencer.diffsIntersect(Uz, Ix0)).toBe(true)
+            expect(differencer.diffsIntersect(Uz, Ix1)).toBe(true)
             expect(differencer.diffsIntersect(Uz, Iz0)).toBe(true)
             expect(differencer.diffsIntersect(Uz, Ux)).toBe(false)
             expect(differencer.diffsIntersect(Uz, Uz)).toBe(true)
-            expect(differencer.diffsIntersect(Uz, Dx0)).toBe(false)
-            expect(differencer.diffsIntersect(Uz, Dx1)).toBe(false)
+            expect(differencer.diffsIntersect(Uz, Dx0)).toBe(true)
+            expect(differencer.diffsIntersect(Uz, Dx1)).toBe(true)
             expect(differencer.diffsIntersect(Uz, Dz0)).toBe(true)
 
             expect(differencer.diffsIntersect(Dx0, Ix0)).toBe(true)
             expect(differencer.diffsIntersect(Dx0, Ix1)).toBe(true)
-            expect(differencer.diffsIntersect(Dx0, Iz0)).toBe(false)
+            expect(differencer.diffsIntersect(Dx0, Iz0)).toBe(true)
             expect(differencer.diffsIntersect(Dx0, Ux)).toBe(true)
-            expect(differencer.diffsIntersect(Dx0, Uz)).toBe(false)
+            expect(differencer.diffsIntersect(Dx0, Uz)).toBe(true)
             expect(differencer.diffsIntersect(Dx0, Dx0)).toBe(true)
             expect(differencer.diffsIntersect(Dx0, Dx1)).toBe(true)
-            expect(differencer.diffsIntersect(Dx0, Dz0)).toBe(false)
+            expect(differencer.diffsIntersect(Dx0, Dz0)).toBe(true)
 
             expect(differencer.diffsIntersect(Dx1, Ix0)).toBe(true)
             expect(differencer.diffsIntersect(Dx1, Ix1)).toBe(true)
-            expect(differencer.diffsIntersect(Dx1, Iz0)).toBe(false)
+            expect(differencer.diffsIntersect(Dx1, Iz0)).toBe(true)
             expect(differencer.diffsIntersect(Dx1, Ux)).toBe(true)
-            expect(differencer.diffsIntersect(Dx1, Uz)).toBe(false)
+            expect(differencer.diffsIntersect(Dx1, Uz)).toBe(true)
             expect(differencer.diffsIntersect(Dx1, Dx0)).toBe(true)
             expect(differencer.diffsIntersect(Dx1, Dx1)).toBe(true)
-            expect(differencer.diffsIntersect(Dx1, Dz0)).toBe(false)
+            expect(differencer.diffsIntersect(Dx1, Dz0)).toBe(true)
 
-            expect(differencer.diffsIntersect(Dz0, Ix0)).toBe(false)
-            expect(differencer.diffsIntersect(Dz0, Ix1)).toBe(false)
+            expect(differencer.diffsIntersect(Dz0, Ix0)).toBe(true)
+            expect(differencer.diffsIntersect(Dz0, Ix1)).toBe(true)
             expect(differencer.diffsIntersect(Dz0, Iz0)).toBe(true)
-            expect(differencer.diffsIntersect(Dz0, Ux)).toBe(false)
+            expect(differencer.diffsIntersect(Dz0, Ux)).toBe(true)
             expect(differencer.diffsIntersect(Dz0, Uz)).toBe(true)
-            expect(differencer.diffsIntersect(Dz0, Dx0)).toBe(false)
-            expect(differencer.diffsIntersect(Dz0, Dx1)).toBe(false)
+            expect(differencer.diffsIntersect(Dz0, Dx0)).toBe(true)
+            expect(differencer.diffsIntersect(Dz0, Dx1)).toBe(true)
             expect(differencer.diffsIntersect(Dz0, Dz0)).toBe(true)
         })
 
@@ -437,21 +469,24 @@ describe('ObjectDifferencer', () => {
             return MapDiff(
                 new Map(inserts),
                 new Map(),
-                new Map()
+                new Map(),
+                KeyDiff([], inserts.map(([k]) => k))
             )
         }
         function UpdateDiff<TDiff extends IDiff> (updates: [string, TDiff][]) {
             return MapDiff(
                 new Map(),
                 new Map(updates),
-                new Map()
+                new Map(),
+                Empty,
             )
         }
         function DeleteDiff (deletes: [string, any][]) {
             return MapDiff(
                 new Map(),
                 new Map(),
-                new Map(deletes)
+                new Map(deletes),
+                KeyDiff(deletes.map(([k]) => k), [])
             )
         }
     })
@@ -461,12 +496,14 @@ test('MapDiff', () => {
     const diff = MapDiff(
         new Map([['a', 1]]),
         new Map([['b', IdentityDiff(0, 1)]]),
-        new Map([['c', 1]])
+        new Map([['c', 1]]),
+        Empty,
     )
     expect(diff).toStrictEqual({
         inserts: new Map([['a', 1]]),
         updates: new Map([['b', IdentityDiff(0, 1)]]),
         deletes: new Map([['c', 1]]),
+        keys: Empty,
         isEmpty: false
     })
 })
