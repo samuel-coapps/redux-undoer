@@ -35,7 +35,7 @@ const Diff = {
         T extends object,
         TValueDiff extends IDiff = IDiff
     > (options?: TObjectOptions<T, TValueDiff>) {
-        return new ObjectDifferencer(options)
+        return new ObjectDifferencer<T, TValueDiff>(options)
     },
     objectMap<
         V,

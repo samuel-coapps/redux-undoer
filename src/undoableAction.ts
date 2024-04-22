@@ -13,20 +13,20 @@
 // limitations under the License.
 
 import { Action } from 'redux'
-import { AsyncThunk } from '@reduxjs/toolkit'
+import { AsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 
 const IS_UNDOABLE_GROUP = Symbol('Undoable::IsUndoableGroup')
 const MERGE_LAST = 'Undoable::MergeLast'
 
-class UndoableActionGroup {
+class UndoableActionGroup<T> {
     static idGenerator = IdGenerator()
     readonly type: string = `Undoable::${UndoableActionGroup.name}::actionType`
-    readonly actions: UndoableAction[]
+    readonly actions: UndoableAction<T>[]
     readonly id = UndoableActionGroup.idGenerator.next().value as string
     private readonly mergeTarget?: string
     readonly dropTail?: boolean
     constructor(
-        actions: UndoableAction[] = [],
+        actions: UndoableAction<T>[] = [],
         options?: { mergeTarget?: string; dropTail?: boolean }
     ) {
         this.actions = actions
@@ -35,7 +35,7 @@ class UndoableActionGroup {
         Object.defineProperty(this, IS_UNDOABLE_GROUP, { value: true })
     }
 
-    with(actionCreator: TActionCreator, arg?: any) {
+    with(actionCreator: TActionCreator<T>, arg?: any) {
         const undoable = new UndoableAction(actionCreator, arg!)
         return new UndoableActionGroup(this.actions.concat([undoable]))
     }
@@ -47,7 +47,7 @@ class UndoableActionGroup {
         })
     }
 
-    mergeWithGroup(group: UndoableActionGroup) {
+    mergeWithGroup<T2>(group: UndoableActionGroup<T2>) {
         return new UndoableActionGroup(this.actions, { mergeTarget: group.id })
     }
 
@@ -62,15 +62,15 @@ class UndoableActionGroup {
         return undefined
     }
 
-    static is(o: any): o is UndoableActionGroup {
+    static is(o: any): o is UndoableActionGroup<unknown> {
         return o instanceof UndoableActionGroup && IS_UNDOABLE_GROUP in o
     }
 }
 
-class UndoableAction {
-    readonly actionCreator: TActionCreator
+class UndoableAction<T> {
+    readonly actionCreator: TActionCreator<T>
     readonly arg: any
-    constructor(actionCreator: TActionCreator, arg: any) {
+    constructor(actionCreator: TActionCreator<T>, arg: any) {
         this.actionCreator = actionCreator
         this.arg = arg
     }
@@ -104,8 +104,8 @@ function* IdGenerator() {
     }
 }
 
-function isAsyncThunk(
-    actionCreator: TActionCreator
+function isAsyncThunk<T>(
+    actionCreator: TActionCreator<T>
 ): actionCreator is AsyncThunk<any, any, any> {
     return (
         'pending' in actionCreator &&
@@ -115,4 +115,4 @@ function isAsyncThunk(
     )
 }
 
-type TActionCreator = ((arg: any) => Action) | AsyncThunk<any, any, any>
+type TActionCreator<T> = ((arg: any) => PayloadAction<T>) | AsyncThunk<T, any, any>

@@ -209,7 +209,7 @@ function clearAllChanges() {
 
 export { Undoable, createUndoRedo, undo, redo, clearAllChanges, ActionTypes }
 
-function InfoForActionGroup (action: UndoableActionGroup) {
+function InfoForActionGroup<T> (action: UndoableActionGroup<T>) {
     const createdActions = action.actions.map((a) => a.create())
     return {
         dispatches: createdActions.map(a => a.action),
