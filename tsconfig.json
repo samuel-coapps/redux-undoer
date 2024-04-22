@@ -3,7 +3,9 @@
         "declaration": true,
         "rootDir": "./src/",
         "outDir": "./lib/",
-        "composite": true
+        "composite": true,
+        "baseUrl": ".",
+        "types": ["jest", "node", "@types/jest"]
     },
     "exclude": ["node_modules", "lib"]
 }
