@@ -299,7 +299,7 @@ describe('createUndoMiddleware', () => {
             const store = configureStore({
                 reducer,
                 middleware: (getDefaultMiddleware) => {
-                    return [middleware].concat(getDefaultMiddleware())
+                    return getDefaultMiddleware().prepend([middleware])
                 },
             })
 
@@ -689,9 +689,9 @@ describe('createUndoMiddleware', () => {
             const store = configureStore({
                 reducer,
                 middleware: (getDefaultMiddleware) => {
-                    return [middleware]
+                    return getDefaultMiddleware()
                         .concat(extraMiddlewares)
-                        .concat(getDefaultMiddleware())
+                        .prepend([middleware])
                 },
             })
 
